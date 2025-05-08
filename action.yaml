@@ -1,0 +1,48 @@
+name: Deploy Laravel to Shared Hosting
+
+on:
+  push:
+    branches:
+      - main  # Change this to your deployment branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install PHP and Dependencies
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'  # Change to your PHP version
+          tools: composer
+          coverage: none
+
+      - name: Install Composer Dependencies
+        run: |
+          composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Upload Files to cPanel via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./
+          server-dir: /home/yourcpanelusername/public_html/  # Change this path
+
+      - name: Set Permissions
+        run: |
+          chmod -R 755 storage bootstrap/cache
+
+      - name: Clear Laravel Cache
+        run: |
+          sshpass -p "${{ secrets.FTP_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.FTP_USERNAME }}@${{ secrets.FTP_HOST }} "cd /home/yourcpanelusername/public_html && php artisan cache:clear && php artisan config:cache && php artisan route:cache"
+
+      - name: Run Migrations
+        run: |
+          sshpass -p "${{ secrets.FTP_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.FTP_USERNAME }}@${{ secrets.FTP_HOST }} "cd /home/yourcpanelusername/public_html && php artisan migrate --force"
+
+
